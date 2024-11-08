@@ -589,7 +589,7 @@ static void _piwigo_authenticate(dt_storage_piwigo_gui_data_t *ui)
       const gchar *errormessage =
         json_object_get_string_member(ui->api->response, "message");
       dt_print(DT_DEBUG_ALWAYS,
-               "[imageio_storage_piwigo] could not authenticate: `%s'!\n",
+               "[imageio_storage_piwigo] could not authenticate: `%s'!",
                errormessage);
       _piwigo_set_status(ui, _("not authenticated"), "#e07f7f");
       _piwigo_ctx_destroy(&ui->api);
@@ -600,6 +600,8 @@ static void _piwigo_authenticate(dt_storage_piwigo_gui_data_t *ui)
     _piwigo_set_status(ui, _("not authenticated, cannot reach server"), "#e07f7f");
     _piwigo_ctx_destroy(&ui->api);
   }
+
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_IMAGEIO_STORAGE_EXPORT_ENABLE);
 }
 
 static void _piwigo_entry_changed(GtkEntry *entry,
@@ -608,9 +610,11 @@ static void _piwigo_entry_changed(GtkEntry *entry,
   dt_storage_piwigo_gui_data_t *ui = (dt_storage_piwigo_gui_data_t *)data;
 
   _piwigo_set_status(ui, _("not authenticated"), "#e07f7f");
-    gtk_widget_set_sensitive(GTK_WIDGET(ui->album_list), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(ui->album_list), FALSE);
 
   if(ui->api) _piwigo_ctx_destroy(&ui->api);
+
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_IMAGEIO_STORAGE_EXPORT_ENABLE);
 }
 
 static void _piwigo_server_entry_changed(GtkEntry *entry,
@@ -624,6 +628,8 @@ static void _piwigo_server_entry_changed(GtkEntry *entry,
     _piwigo_ctx_destroy(&ui->api);
     gtk_widget_set_sensitive(GTK_WIDGET(ui->album_list), FALSE);
   }
+
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_IMAGEIO_STORAGE_EXPORT_ENABLE);
 }
 
 static void _piwigo_account_changed(GtkComboBox *cb,
@@ -995,8 +1001,7 @@ static void _filname_pattern_entry_changed_callback(GtkEntry *entry,
 
 void gui_init(dt_imageio_module_storage_t *self)
 {
-  self->gui_data =
-    (dt_storage_piwigo_gui_data_t *)g_malloc0(sizeof(dt_storage_piwigo_gui_data_t));
+  self->gui_data = g_malloc0(sizeof(dt_storage_piwigo_gui_data_t));
   dt_storage_piwigo_gui_data_t *ui = self->gui_data;
 
   ui->albums = NULL;
@@ -1214,8 +1219,13 @@ static gboolean _finalize_store(gpointer user_data)
 {
   dt_storage_piwigo_gui_data_t *g = (dt_storage_piwigo_gui_data_t *)user_data;
 
-  // notify that uploads are completed to empty the lounge
+  if(g->api == NULL)
+  {
+    // not logged in, nothing to cleanup
+    return FALSE;
+  }
 
+  // notify that uploads are completed to empty the lounge
   if(!g->api->error_occured)
   {
     GList *args = NULL;
@@ -1264,6 +1274,14 @@ int store(dt_imageio_module_storage_t *self,
 {
   dt_storage_piwigo_gui_data_t *ui = self->gui_data;
   dt_storage_piwigo_params_t *p = (dt_storage_piwigo_params_t *)sdata;
+
+  if(p->api == NULL)
+  {
+    dt_print(DT_DEBUG_ALWAYS,
+             "[imageio_storage_piwigo] not logged in to Piwigo server!");
+    dt_control_log(_("not logged in to Piwigo server!"));
+    return 1;
+  }
 
   gint result = 0;
   gint skipped = 0;
@@ -1334,7 +1352,7 @@ int store(dt_imageio_module_storage_t *self,
                        icc_intent, self, sdata, num, total, metadata) != 0)
   {
     dt_print(DT_DEBUG_ALWAYS,
-             "[imageio_storage_piwigo] could not export to file: `%s'!\n",
+             "[imageio_storage_piwigo] could not export to file: `%s'!",
              fname);
     dt_control_log(_("could not export to file `%s'!"), fname);
     result = 1;
@@ -1372,7 +1390,7 @@ int store(dt_imageio_module_storage_t *self,
         if(!status)
         {
           dt_print(DT_DEBUG_ALWAYS,
-                   "[imageio_storage_piwigo] could not update to Piwigo!\n");
+                   "[imageio_storage_piwigo] could not update to Piwigo!");
           dt_control_log(_("could not update to Piwigo!"));
           result = 1;
         }
@@ -1388,7 +1406,7 @@ int store(dt_imageio_module_storage_t *self,
         if(!status)
         {
           dt_print(DT_DEBUG_ALWAYS,
-                   "[imageio_storage_piwigo] could not upload to Piwigo!\n");
+                   "[imageio_storage_piwigo] could not upload to Piwigo!");
           dt_control_log(_("could not upload to Piwigo!"));
           result = 1;
         }
@@ -1443,13 +1461,12 @@ void init(dt_imageio_module_storage_t *self)
 
 void *get_params(dt_imageio_module_storage_t *self)
 {
-  dt_storage_piwigo_gui_data_t *ui = (dt_storage_piwigo_gui_data_t *)self->gui_data;
+  dt_storage_piwigo_gui_data_t *ui = self->gui_data;
 
   if(!ui)
     return NULL; // gui not initialized, CLI mode
 
-  dt_storage_piwigo_params_t *p =
-    (dt_storage_piwigo_params_t *)g_malloc0(sizeof(dt_storage_piwigo_params_t));
+  dt_storage_piwigo_params_t *p = g_malloc0(sizeof(dt_storage_piwigo_params_t));
 
   if(!p)
     return NULL;
@@ -1519,7 +1536,7 @@ void *get_params(dt_imageio_module_storage_t *self)
           {
             // Something went wrong...
             dt_print(DT_DEBUG_ALWAYS,
-                     "Something went wrong.. album index %d = NULL\n", index - 2);
+                     "Something went wrong.. album index %d = NULL", index - 2);
           }
           else
           {
@@ -1529,7 +1546,7 @@ void *get_params(dt_imageio_module_storage_t *self)
           if(!p->album_id)
           {
             dt_print(DT_DEBUG_ALWAYS,
-                     "[imageio_storage_piwigo] cannot find album `%s'!\n", p->album);
+                     "[imageio_storage_piwigo] cannot find album `%s'!", p->album);
           }
           break;
       }
@@ -1583,6 +1600,13 @@ gboolean supported(dt_imageio_module_storage_t *storage,
     return TRUE;
 
   return FALSE;
+}
+
+gboolean export_enabled(dt_imageio_module_storage_t *self)
+{
+  dt_storage_piwigo_gui_data_t *ui = self->gui_data;
+
+  return ui->api != NULL && ui->api->authenticated;
 }
 
 void free_params(dt_imageio_module_storage_t *self,

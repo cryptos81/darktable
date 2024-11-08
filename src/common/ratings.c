@@ -76,10 +76,6 @@ static void _ratings_apply_to_image(const dt_imgid_t imgid, const int rating)
     dt_image_cache_write_release_info(darktable.image_cache, image,
                                       DT_IMAGE_CACHE_SAFE, "_ratings_apply_to_image");
   }
-  else
-  {
-    dt_image_cache_write_release(darktable.image_cache, image, DT_IMAGE_CACHE_RELAXED);
-  }
 }
 
 static void _pop_undo(gpointer user_data, dt_undo_type_t type, dt_undo_data_t data, dt_undo_action_t action, GList **imgs)
@@ -88,7 +84,7 @@ static void _pop_undo(gpointer user_data, dt_undo_type_t type, dt_undo_data_t da
   {
     for(GList *list = (GList *)data; list; list = g_list_next(list))
     {
-      dt_undo_ratings_t *ratings = (dt_undo_ratings_t *)list->data;
+      dt_undo_ratings_t *ratings = list->data;
       _ratings_apply_to_image(ratings->imgid, (action == DT_ACTION_UNDO) ? ratings->before : ratings->after);
       *imgs = g_list_prepend(*imgs, GINT_TO_POINTER(ratings->imgid));
     }
@@ -156,7 +152,7 @@ static void _ratings_apply(const GList *imgs,
     const int old_rating = dt_ratings_get(image_id);
     if(undo_on)
     {
-      dt_undo_ratings_t *undoratings = (dt_undo_ratings_t *)malloc(sizeof(dt_undo_ratings_t));
+      dt_undo_ratings_t *undoratings = malloc(sizeof(dt_undo_ratings_t));
       undoratings->imgid = image_id;
       undoratings->before = old_rating;
       undoratings->after = rating;
@@ -267,7 +263,7 @@ static float _action_process_rating(gpointer target,
         break;
       default:
         dt_print(DT_DEBUG_ALWAYS,
-                 "[_action_process_rating] unknown shortcut effect (%d) for rating\n", effect);
+                 "[_action_process_rating] unknown shortcut effect (%d) for rating", effect);
         break;
       }
     }

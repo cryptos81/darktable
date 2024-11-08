@@ -406,6 +406,7 @@ typedef struct darktable_t
   char *cachedir;
   char *dump_pfm_module;
   char *dump_pfm_pipe;
+  char *dump_diff_pipe;
   char *tmp_directory;
   char *bench_module;
   dt_lua_state_t lua_state;
@@ -448,9 +449,10 @@ void dt_cleanup();
          && !(DT_DEBUG_RESTRICT & (thread) & ~darktable.unmuted)) \
         func(__VA_ARGS__); } while(0)
 
-#define dt_print_pipe(thread, ...) dt_debug_if(thread, dt_print_pipe_ext, __VA_ARGS__)
 #define dt_print(thread, ...) dt_debug_if(thread, dt_print_ext, __VA_ARGS__)
 #define dt_print_nts(thread, ...) dt_debug_if(thread, dt_print_nts_ext, __VA_ARGS__)
+#define dt_print_pipe(thread, title, pipe, module, device, roi_in, roi_out, ...) \
+  dt_debug_if(thread, dt_print_pipe_ext, title, pipe, module, device, roi_in, roi_out, " " __VA_ARGS__)
 
 void dt_print_ext(const char *msg, ...)
   __attribute__((format(printf, 1, 2)));
@@ -488,6 +490,14 @@ void dt_dump_pipe_pfm(const char *mod,
                       const int bpp,
                       const gboolean input,
                       const char *pipe);
+
+void dt_dump_pipe_diff_pfm(const char *mod,
+                          const float *a,
+                          const float *b,
+                          const int width,
+                          const int height,
+                          const int ch,
+                          const char *pipe);
 
 void *dt_alloc_aligned(const size_t size);
 
@@ -874,7 +884,7 @@ static inline gboolean dt_slist_length_equal(GSList *l1, GSList *l2)
 }
 
 // checks internally for DT_DEBUG_MEMORY
-void dt_print_mem_usage();
+void dt_print_mem_usage(char *info);
 
 // try to start the backthumbs crawler
 void dt_start_backtumbs_crawler();
@@ -898,7 +908,7 @@ static inline void dt_unreachable_codepath_with_caller(const char *description,
 {
   dt_print(DT_DEBUG_ALWAYS,
            "[dt_unreachable_codepath] {%s} %s:%d (%s) - we should not be here."
-           " please report this to the developers.",
+           " please report this to the developers",
            description, file, line, function);
   __builtin_unreachable();
 }

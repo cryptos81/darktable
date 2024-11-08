@@ -126,7 +126,7 @@ const char *aliases()
   return _("reframe|distortion");
 }
 
-const char **description(struct dt_iop_module_t *self)
+const char **description(dt_iop_module_t *self)
 {
   return dt_iop_set_description(self,
                                 _("change the framing"),
@@ -166,7 +166,7 @@ dt_iop_colorspace_type_t default_colorspace(dt_iop_module_t *self,
   return IOP_CS_RGB;
 }
 
-static int _gui_has_focus(struct dt_iop_module_t *self)
+static int _gui_has_focus(dt_iop_module_t *self)
 {
   return (self->dev->gui_module == self
           && dt_dev_modulegroups_test_activated(darktable.develop));
@@ -226,10 +226,10 @@ static void _commit_box(dt_iop_module_t *self,
     dt_dev_add_history_item(darktable.develop, self, TRUE);
 }
 
-static gboolean _set_max_clip(struct dt_iop_module_t *self)
+static gboolean _set_max_clip(dt_iop_module_t *self)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
+  dt_iop_crop_params_t *p = self->params;
 
   if(g->clip_max_pipe_hash == self->dev->preview_pipe->backbuf_hash) return TRUE;
   if(self->dev->preview_pipe->status != DT_DEV_PIXELPIPE_VALID) return TRUE;
@@ -269,7 +269,7 @@ gboolean distort_transform(dt_iop_module_t *self,
                            float *const restrict points,
                            size_t points_count)
 {
-  dt_iop_crop_data_t *d = (dt_iop_crop_data_t *)piece->data;
+  dt_iop_crop_data_t *d = piece->data;
 
   const float crop_top = piece->buf_in.height * d->cy;
   const float crop_left = piece->buf_in.width * d->cx;
@@ -294,7 +294,7 @@ gboolean distort_backtransform(dt_iop_module_t *self,
                                float *const restrict points,
                                size_t points_count)
 {
-  dt_iop_crop_data_t *d = (dt_iop_crop_data_t *)piece->data;
+  dt_iop_crop_data_t *d = piece->data;
 
   const float crop_top = piece->buf_in.height * d->cy;
   const float crop_left = piece->buf_in.width * d->cx;
@@ -314,8 +314,8 @@ gboolean distort_backtransform(dt_iop_module_t *self,
   return TRUE;
 }
 
-void distort_mask(struct dt_iop_module_t *self,
-                  struct dt_dev_pixelpipe_iop_t *piece,
+void distort_mask(dt_iop_module_t *self,
+                  dt_dev_pixelpipe_iop_t *piece,
                   const float *const in,
                   float *const out,
                   const dt_iop_roi_t *const roi_in,
@@ -324,13 +324,13 @@ void distort_mask(struct dt_iop_module_t *self,
   dt_iop_copy_image_roi(out, in, 1, roi_in, roi_out);
 }
 
-void modify_roi_out(struct dt_iop_module_t *self,
-                    struct dt_dev_pixelpipe_iop_t *piece,
+void modify_roi_out(dt_iop_module_t *self,
+                    dt_dev_pixelpipe_iop_t *piece,
                     dt_iop_roi_t *roi_out,
                     const dt_iop_roi_t *roi_in)
 {
   *roi_out = *roi_in;
-  dt_iop_crop_data_t *d = (dt_iop_crop_data_t *)piece->data;
+  dt_iop_crop_data_t *d = piece->data;
 
   const float px = MAX(0.0f, floorf(roi_in->width * d->cx));
   const float py = MAX(0.0f, floorf(roi_in->height * d->cy));
@@ -340,7 +340,7 @@ void modify_roi_out(struct dt_iop_module_t *self,
   // if the aspect has been toggled it's presented here as negative
   const float aspect = d->aspect < 0.0f ? fabsf(1.0f / d->aspect) : d->aspect;
   const gboolean keep_aspect = aspect > 1e-5;
-  const gboolean landscape = roi_in->width > roi_in->height;
+  const gboolean landscape = roi_in->width >= roi_in->height;
 
   float dx = odx;
   float dy = ody;
@@ -359,7 +359,7 @@ void modify_roi_out(struct dt_iop_module_t *self,
 
   dt_print_pipe(DT_DEBUG_PIPE | DT_DEBUG_VERBOSE,
     "crop aspects", piece->pipe, self, DT_DEVICE_NONE, roi_in, NULL,
-    " %s%s%sAspect=%.5f. odx: %.4f ody: %.4f --> dx: %.4f dy: %.4f\n",
+    " %s%s%sAspect=%.5f. odx: %.4f ody: %.4f --> dx: %.4f dy: %.4f",
     d->aspect < 0.0f ? "toggled " : "",
     keep_aspect ? "fixed " : "",
     landscape ? "landscape " : "portrait ",
@@ -370,12 +370,12 @@ void modify_roi_out(struct dt_iop_module_t *self,
   if(roi_out->height < 5) roi_out->height = 5;
 }
 
-void modify_roi_in(struct dt_iop_module_t *self,
-                   struct dt_dev_pixelpipe_iop_t *piece,
+void modify_roi_in(dt_iop_module_t *self,
+                   dt_dev_pixelpipe_iop_t *piece,
                    const dt_iop_roi_t *roi_out,
                    dt_iop_roi_t *roi_in)
 {
-  dt_iop_crop_data_t *d = (dt_iop_crop_data_t *)piece->data;
+  dt_iop_crop_data_t *d = piece->data;
   *roi_in = *roi_out;
 
   const float iw = piece->buf_in.width * roi_out->scale;
@@ -388,7 +388,7 @@ void modify_roi_in(struct dt_iop_module_t *self,
   roi_in->y = CLAMP(roi_in->y, 0, (int)floorf(ih));
 }
 
-void process(struct dt_iop_module_t *self,
+void process(dt_iop_module_t *self,
              dt_dev_pixelpipe_iop_t *piece,
              const void *const ivoid,
              void *const ovoid,
@@ -399,7 +399,7 @@ void process(struct dt_iop_module_t *self,
 }
 
 #ifdef HAVE_OPENCL
-int process_cl(struct dt_iop_module_t *self,
+int process_cl(dt_iop_module_t *self,
                dt_dev_pixelpipe_iop_t *piece,
                cl_mem dev_in,
                cl_mem dev_out,
@@ -413,13 +413,13 @@ int process_cl(struct dt_iop_module_t *self,
 }
 #endif
 
-void commit_params(struct dt_iop_module_t *self,
+void commit_params(dt_iop_module_t *self,
                    dt_iop_params_t *p1,
                    dt_dev_pixelpipe_t *pipe,
                    dt_dev_pixelpipe_iop_t *piece)
 {
   dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)p1;
-  dt_iop_crop_data_t *d = (dt_iop_crop_data_t *)piece->data;
+  dt_iop_crop_data_t *d = piece->data;
 
   if(_gui_has_focus(self) && (pipe->type & DT_DEV_PIXELPIPE_BASIC))
   {
@@ -453,29 +453,26 @@ void commit_params(struct dt_iop_module_t *self,
 
 static void _event_preview_updated_callback(gpointer instance, dt_iop_module_t *self)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
   if(!g) return; // seems that sometimes, g can be undefined for some reason...
   g->preview_ready = TRUE;
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(_event_preview_updated_callback), self);
+  DT_CONTROL_SIGNAL_DISCONNECT(_event_preview_updated_callback, self);
 
   // force max size to be recomputed
   g->clip_max_pipe_hash = 0;
 }
 
-void gui_focus(struct dt_iop_module_t *self, gboolean in)
+void gui_focus(dt_iop_module_t *self, gboolean in)
 {
   darktable.develop->history_postpone_invalidate =
     in && dt_dev_modulegroups_test_activated(darktable.develop);
 
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
+  dt_iop_crop_params_t *p = self->params;
   if(self->enabled)
   {
     // once the pipe is recomputed, we want to update final sizes
-    DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                    DT_SIGNAL_DEVELOP_PREVIEW_PIPE_FINISHED,
-                                    G_CALLBACK(_event_preview_updated_callback), self);
+    DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_DEVELOP_PREVIEW_PIPE_FINISHED, _event_preview_updated_callback, self);
     if(in)
     {
       // got focus, grab stuff to gui:
@@ -504,14 +501,14 @@ void gui_focus(struct dt_iop_module_t *self, gboolean in)
   g->focus_time = g_get_monotonic_time();
 }
 
-void init_pipe(struct dt_iop_module_t *self,
+void init_pipe(dt_iop_module_t *self,
                dt_dev_pixelpipe_t *pipe,
                dt_dev_pixelpipe_iop_t *piece)
 {
   piece->data = malloc(sizeof(dt_iop_crop_data_t));
 }
 
-void cleanup_pipe(struct dt_iop_module_t *self,
+void cleanup_pipe(dt_iop_module_t *self,
                   dt_dev_pixelpipe_t *pipe,
                   dt_dev_pixelpipe_iop_t *piece)
 {
@@ -521,7 +518,7 @@ void cleanup_pipe(struct dt_iop_module_t *self,
 
 static float _aspect_ratio_get(dt_iop_module_t *self, GtkWidget *combo)
 {
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_params_t *p = self->params;
 
   // retrieve full image dimensions to calculate aspect ratio if
   // "original image" specified
@@ -533,7 +530,7 @@ static float _aspect_ratio_get(dt_iop_module_t *self, GtkWidget *combo)
 
     if(!(wd > 0.0f && ht > 0.0f)) return 0.0f;
 
-    const gboolean regular = (p->ratio_d > 0 && wd > ht)
+    const gboolean regular = (p->ratio_d > 0 && wd >= ht)
                           || (p->ratio_d < 0 && wd < ht);
     return regular ? wd / ht : ht / wd;
   }
@@ -655,7 +652,7 @@ static float _aspect_ratio_get(dt_iop_module_t *self, GtkWidget *combo)
 
 static void _aspect_apply(dt_iop_module_t *self, _grab_region_t grab)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
 
   int piwd, piht;
   dt_dev_get_processed_size(&darktable.develop->full, &piwd, &piht);
@@ -767,7 +764,7 @@ void reload_defaults(dt_iop_module_t *self)
 {
   const dt_image_t *img = &self->dev->image_storage;
 
-  dt_iop_crop_params_t *d = (dt_iop_crop_params_t *)self->default_params;
+  dt_iop_crop_params_t *d = self->default_params;
 
   d->cx = img->usercrop[1];
   d->cy = img->usercrop[0];
@@ -814,8 +811,8 @@ static void _float_to_fract(const char *num, int *n, int *d)
 
 static void _event_aspect_presets_changed(GtkWidget *combo, dt_iop_module_t *self)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
+  dt_iop_crop_params_t *p = self->params;
   const int which = dt_bauhaus_combobox_get(combo);
   int d = abs(p->ratio_d), n = p->ratio_n;
   const char *text = dt_bauhaus_combobox_get_text(combo);
@@ -957,8 +954,8 @@ static void _event_aspect_presets_changed(GtkWidget *combo, dt_iop_module_t *sel
 
 void gui_changed(dt_iop_module_t *self, GtkWidget *w, void *previous)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
+  dt_iop_crop_params_t *p = self->params;
 
   ++darktable.gui->reset;
 
@@ -1000,17 +997,17 @@ void gui_changed(dt_iop_module_t *self, GtkWidget *w, void *previous)
   _commit_box(self, g, p);
 }
 
-void gui_reset(struct dt_iop_module_t *self)
+void gui_reset(dt_iop_module_t *self)
 {
   /* reset aspect preset to default */
   dt_conf_set_int("plugins/darkroom/crop/ratio_d", 0);
   dt_conf_set_int("plugins/darkroom/crop/ratio_n", 0);
 }
 
-void gui_update(struct dt_iop_module_t *self)
+void gui_update(dt_iop_module_t *self)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
+  dt_iop_crop_params_t *p = self->params;
 
   //  set aspect ratio based on the current image, if not found let's default
   //  to free aspect.
@@ -1065,12 +1062,12 @@ void gui_update(struct dt_iop_module_t *self)
 
 static void _event_key_swap(dt_iop_module_t *self)
 {
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_params_t *p = self->params;
   p->ratio_d = -p->ratio_d;
 
   int iwd, iht;
   dt_dev_get_processed_size(&darktable.develop->full, &iwd, &iht);
-  const gboolean horizontal = (iwd > iht) == (p->ratio_d < 0);
+  const gboolean horizontal = (iwd >= iht) == (p->ratio_d < 0);
 
   _aspect_apply(self, horizontal ? GRAB_HORIZONTAL : GRAB_VERTICAL);
   dt_control_queue_redraw_center();
@@ -1114,7 +1111,7 @@ static gchar *_aspect_format(gchar *original,
     return g_strdup_printf("%s  %4.2f", original, (float)adim / (float)bdim);
 }
 
-void gui_init(struct dt_iop_module_t *self)
+void gui_init(dt_iop_module_t *self)
 {
   dt_iop_crop_gui_data_t *g = IOP_GUI_ALLOC(crop);
 
@@ -1171,7 +1168,7 @@ void gui_init(struct dt_iop_module_t *self)
     dt_conf_all_string_entries("plugins/darkroom/clipping/extra_aspect_ratios");
   for(GSList *iter = custom_aspects; iter; iter = g_slist_next(iter))
   {
-    dt_conf_string_entry_t *nv = (dt_conf_string_entry_t *)iter->data;
+    dt_conf_string_entry_t *nv = iter->data;
 
     const char *c = nv->value;
     const char *end = nv->value + strlen(nv->value);
@@ -1185,7 +1182,7 @@ void gui_init(struct dt_iop_module_t *self)
       if(n == 0 || d == 0)
       {
         dt_print(DT_DEBUG_ALWAYS,
-                 "invalid ratio format for `%s'. it should be \"number:number\"\n",
+                 "invalid ratio format for `%s'. it should be \"number:number\"",
                  nv->key);
         dt_control_log
           (_("invalid ratio format for `%s'. it should be \"number:number\""),
@@ -1202,7 +1199,7 @@ void gui_init(struct dt_iop_module_t *self)
     else
     {
       dt_print(DT_DEBUG_ALWAYS,
-               "invalid ratio format for `%s'. it should be \"number:number\"\n",
+               "invalid ratio format for `%s'. it should be \"number:number\"",
                nv->key);
       dt_control_log
         (_("invalid ratio format for `%s'. it should be \"number:number\""),
@@ -1220,7 +1217,7 @@ void gui_init(struct dt_iop_module_t *self)
   int n = ((dt_iop_crop_aspect_t *)g->aspect_list->data)->n + 1;
   for(GList *iter = g->aspect_list; iter; iter = g_list_next(iter))
   {
-    dt_iop_crop_aspect_t *aspect = (dt_iop_crop_aspect_t *)iter->data;
+    dt_iop_crop_aspect_t *aspect = iter->data;
     const int dd = MIN(aspect->d, aspect->n);
     const int nn = MAX(aspect->d, aspect->n);
     if(dd == d && nn == n)
@@ -1315,9 +1312,9 @@ static void _aspect_free(gpointer data)
   g_free(aspect);
 }
 
-void gui_cleanup(struct dt_iop_module_t *self)
+void gui_cleanup(dt_iop_module_t *self)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
   g_list_free_full(g->aspect_list, _aspect_free);
   g->aspect_list = NULL;
 
@@ -1370,7 +1367,7 @@ void gui_post_expose(dt_iop_module_t *self,
                      const float zoom_scale)
 {
   dt_develop_t *dev = self->dev;
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
 
   // is this expose enforced by another module in focus?
   const gboolean external = dev->gui_module != self;
@@ -1518,7 +1515,7 @@ int mouse_moved(dt_iop_module_t *self,
                 const int which,
                 const float zoom_scale)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
 
   // we don't do anything if the image is not ready
   if(!g->preview_ready || self->dev->preview_pipe->loading) return 0;
@@ -1709,8 +1706,8 @@ int button_released(dt_iop_module_t *self,
                     const uint32_t state,
                     const float zoom_scale)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
-  dt_iop_crop_params_t *p = (dt_iop_crop_params_t *)self->params;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
+  dt_iop_crop_params_t *p = self->params;
   // we don't do anything if the image is not ready
   if(!g->preview_ready) return 0;
 
@@ -1735,7 +1732,7 @@ int button_pressed(dt_iop_module_t *self,
                    const uint32_t state,
                    const float zoom_scale)
 {
-  dt_iop_crop_gui_data_t *g = (dt_iop_crop_gui_data_t *)self->gui_data;
+  dt_iop_crop_gui_data_t *g = self->gui_data;
   // we don't do anything if the image is not ready
 
   if(!g->preview_ready) return 0;
@@ -1801,7 +1798,7 @@ int button_pressed(dt_iop_module_t *self,
     return 0;
 }
 
-GSList *mouse_actions(struct dt_iop_module_t *self)
+GSList *mouse_actions(dt_iop_module_t *self)
 {
   GSList *lm = NULL;
   lm = dt_mouse_action_create_format(lm, DT_MOUSE_ACTION_LEFT_DRAG, 0,

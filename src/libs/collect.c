@@ -186,7 +186,7 @@ void *legacy_params(struct dt_lib_module_t *self,
       /* preset is corrupted, return NULL and drop the preset */
       return NULL;
 
-    dt_lib_collect_params_t *n = (dt_lib_collect_params_t *)malloc(old_params_size);
+    dt_lib_collect_params_t *n = malloc(old_params_size);
 
     const int table[DT_COLLECTION_PROP_LAST] =
       {
@@ -243,7 +243,7 @@ void *legacy_params(struct dt_lib_module_t *self,
       /* preset is corrupted, return NULL and drop the preset */
       return NULL;
 
-    dt_lib_collect_params_t *new = (dt_lib_collect_params_t *)malloc(old_params_size);
+    dt_lib_collect_params_t *new = malloc(old_params_size);
 
     const int table[DT_COLLECTION_PROP_LAST] =
       {
@@ -501,7 +501,7 @@ static void view_popup_menu_onSearchFilmroll(GtkWidget *menuitem,
       /* update collection to view missing filmroll */
       _lib_folders_update_collection(new_path);
 
-      DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_FILMROLLS_CHANGED);
+      DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_FILMROLLS_CHANGED);
     }
     else
       goto error;
@@ -1092,10 +1092,9 @@ static void _lib_folders_update_collection(const gchar *filmroll)
   if(!darktable.collection->clone)
   {
     dt_collection_memory_update();
-    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals,
-                                  DT_SIGNAL_COLLECTION_CHANGED,
-                                  DT_COLLECTION_CHANGE_NEW_QUERY,
-                                  DT_COLLECTION_PROP_UNDEF, (GList *)NULL, -1);
+    DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_COLLECTION_CHANGED,
+                            DT_COLLECTION_CHANGE_NEW_QUERY,
+                            DT_COLLECTION_PROP_UNDEF, (GList *)NULL, -1);
   }
 }
 
@@ -1435,8 +1434,8 @@ static void _tree_view(dt_lib_collect_rule_t *dr)
           // clang-format on
 
         // clang-format off
-        query = dt_util_dstrcat
-          (query, " UNION ALL "
+        dt_util_str_cat
+          (&query, " UNION ALL "
            "SELECT '%s' AS name, 0 as id, COUNT(*) AS count "
            "FROM main.images AS mi "
            "WHERE mi.id NOT IN"
@@ -1570,7 +1569,7 @@ static void _tree_view(dt_lib_collect_rule_t *dr)
         g_free(tck);
       }
 
-      name_key_tuple_t *tuple = (name_key_tuple_t *)malloc(sizeof(name_key_tuple_t));
+      name_key_tuple_t *tuple = malloc(sizeof(name_key_tuple_t));
       tuple->name = name;
       tuple->collate_key = collate_key;
       tuple->count = count;
@@ -1681,13 +1680,13 @@ static void _tree_view(dt_lib_collect_rule_t *dr)
           if(property == DT_COLLECTION_PROP_FOLDERS) pth = g_strdup("/");
 #endif
           for(int i = 0; i < common_length; i++)
-            pth = dt_util_dstrcat(pth, format_separator, tokens[i]);
+            dt_util_str_cat(&pth, format_separator, tokens[i]);
 
           for(char **token = &tokens[common_length]; *token; token++)
           {
             GtkTreeIter iter;
 
-            pth = dt_util_dstrcat(pth, format_separator, *token);
+            dt_util_str_cat(&pth, format_separator, *token);
             if(_is_time_property(property) && !*(token + 1)) pth[10] = ' ';
 
             gchar *pth2 = g_strdup(pth);
@@ -2077,6 +2076,19 @@ static void _list_view(dt_lib_collect_rule_t *dr)
         // clang-format on
         break;
 
+      case DT_COLLECTION_PROP_EXPOSURE_BIAS: // exposure bias
+        // clang-format off
+        g_snprintf(query, sizeof(query),
+                   "SELECT ROUND(exposure_bias,2), 1, COUNT(*) AS count"
+                   " FROM main.images AS mi"
+                   " WHERE %s"
+                   " GROUP BY ROUND(exposure_bias,2)"
+                   " ORDER BY ROUND(exposure_bias,2) %s",
+                   where_ext,
+                   sort_descending ? "DESC" : "ASC");
+        // clang-format on
+        break;
+
       case DT_COLLECTION_PROP_FILENAME: // filename
         // clang-format off
         g_snprintf(query, sizeof(query),
@@ -2127,10 +2139,10 @@ static void _list_view(dt_lib_collect_rule_t *dr)
           char *orders = NULL;
           for(int i = 0; i < DT_IOP_ORDER_LAST; i++)
           {
-            orders = dt_util_dstrcat(orders, "WHEN mo.version = %d THEN '%s' ",
+            dt_util_str_cat(&orders, "WHEN mo.version = %d THEN '%s' ",
                                      i, _(dt_iop_order_string(i)));
           }
-          orders = dt_util_dstrcat(orders, "ELSE '%s' ", _("none"));
+          dt_util_str_cat(&orders, "ELSE '%s' ", _("none"));
           // clang-format off
           snprintf(query, sizeof(query),
                    "SELECT CASE %s END as ver, 1, COUNT(*) AS count"
@@ -2401,7 +2413,7 @@ static void _list_view(dt_lib_collect_rule_t *dr)
 
     if(match_count == 3)
     {
-      _range_t *range = (_range_t *)calloc(1, sizeof(_range_t));
+      _range_t *range = calloc(1, sizeof(_range_t));
       range->start = g_match_info_fetch(match_info, 1);
       range->stop = g_match_info_fetch(match_info, 2);
 
@@ -2523,23 +2535,23 @@ static void _set_tooltip(dt_lib_collect_rule_t *d)
   g_free(tip);
 }
 
-static void _lib_collect_update_history_visibility(dt_lib_module_t *self)
+void view_enter(struct dt_lib_module_t *self, struct dt_view_t *old_view, struct dt_view_t *new_view)
 {
-  dt_lib_collect_t *d = (dt_lib_collect_t *)self->data;
-  const gboolean hide = dt_conf_get_bool("plugins/lighttable/collect/history_hide");
+  dt_lib_collect_t *d = self->data;
+  const gboolean hide = dt_lib_is_visible(darktable.view_manager->proxy.module_recentcollect.module);
   gtk_widget_set_visible(d->history_box, !hide);
 }
 
 void gui_update(dt_lib_module_t *self)
 {
-  dt_lib_collect_t *d = (dt_lib_collect_t *)self->data;
+  dt_lib_collect_t *d = self->data;
   update_view(d->rule + d->active_rule);
   dt_gui_widget_reallocate_now(GTK_WIDGET(d->view));
 }
 
 static void _lib_collect_gui_update(dt_lib_module_t *self)
 {
-  dt_lib_collect_t *const d = (dt_lib_collect_t *)self->data;
+  dt_lib_collect_t *const d = self->data;
 
   // we check if something has changed since last call
   if(d->view_rule != -1) return;
@@ -2600,9 +2612,9 @@ static void _lib_collect_gui_update(dt_lib_module_t *self)
       const int mode = dt_conf_get_int(confname);
 
       if(mode == DT_LIB_COLLECT_MODE_AND)
-        button->icon = dtgtk_cairo_paint_and;
+        button->icon = dtgtk_cairo_paint_intersection;
       else if(mode == DT_LIB_COLLECT_MODE_OR)
-        button->icon = dtgtk_cairo_paint_or;
+        button->icon = dtgtk_cairo_paint_union;
       else if(mode == DT_LIB_COLLECT_MODE_AND_NOT)
         button->icon = dtgtk_cairo_paint_andnot;
 
@@ -2624,7 +2636,7 @@ void gui_reset(dt_lib_module_t *self)
   dt_conf_set_int("plugins/lighttable/collect/item0", DT_COLLECTION_PROP_FILMROLL);
   dt_conf_set_int("plugins/lighttable/collect/mode0", 0);
   dt_conf_set_string("plugins/lighttable/collect/string0", "");
-  dt_lib_collect_t *d = (dt_lib_collect_t *)self->data;
+  dt_lib_collect_t *d = self->data;
   d->active_rule = 0;
   d->view_rule = -1;
   dt_collection_set_query_flags(darktable.collection, COLLECTION_QUERY_FULL);
@@ -2680,8 +2692,7 @@ static void combo_changed(GtkWidget *combo,
 
   set_properties(d);
   c->view_rule = -1;
-  if(order) DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals,
-                                          DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
+  if(order) DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
   dt_collection_update_query(darktable.collection, DT_COLLECTION_CHANGE_NEW_QUERY,
                              DT_COLLECTION_PROP_UNDEF, NULL);
 }
@@ -2822,8 +2833,7 @@ static void row_activated_with_event(GtkTreeView *view,
   dt_control_signal_block_by_func(darktable.signals, G_CALLBACK(collection_updated),
                                   darktable.view_manager->proxy.module_collect.module);
   if(order)
-    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals,
-                                  DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
+    DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
 
   dt_collection_update_query(darktable.collection,
                              DT_COLLECTION_CHANGE_NEW_QUERY,
@@ -2974,7 +2984,7 @@ static void collection_updated(gpointer instance,
                                gpointer self)
 {
   dt_lib_module_t *dm = (dt_lib_module_t *)self;
-  dt_lib_collect_t *d = (dt_lib_collect_t *)dm->data;
+  dt_lib_collect_t *d = dm->data;
 
   // update tree
   d->view_rule = -1;
@@ -3017,7 +3027,7 @@ static void filmrolls_imported(gpointer instance,
                                gpointer self)
 {
   dt_lib_module_t *dm = (dt_lib_module_t *)self;
-  dt_lib_collect_t *d = (dt_lib_collect_t *)dm->data;
+  dt_lib_collect_t *d = dm->data;
 
   // update tree
   d->view_rule = -1;
@@ -3037,7 +3047,7 @@ static void filmrolls_removed(gpointer instance,
                               gpointer self)
 {
   dt_lib_module_t *dm = (dt_lib_module_t *)self;
-  dt_lib_collect_t *d = (dt_lib_collect_t *)dm->data;
+  dt_lib_collect_t *d = dm->data;
 
   // update tree
   if(d->view_rule != DT_COLLECTION_PROP_FOLDERS)
@@ -3052,7 +3062,7 @@ static void tag_changed(gpointer instance,
                         gpointer self)
 {
   dt_lib_module_t *dm = (dt_lib_module_t *)self;
-  dt_lib_collect_t *d = (dt_lib_collect_t *)dm->data;
+  dt_lib_collect_t *d = dm->data;
   // update tree
   if(_combo_get_active_collection(d->rule[d->active_rule].combo) == DT_COLLECTION_PROP_TAG)
   {
@@ -3105,7 +3115,7 @@ static void _geotag_changed(gpointer instance,
   if(!locid)
   {
     dt_lib_module_t *dm = (dt_lib_module_t *)self;
-    dt_lib_collect_t *d = (dt_lib_collect_t *)dm->data;
+    dt_lib_collect_t *d = dm->data;
     // update tree
     if(_combo_get_active_collection(d->rule[d->active_rule].combo)
        == DT_COLLECTION_PROP_GEOTAGGING)
@@ -3135,7 +3145,7 @@ static void metadata_changed(gpointer instance,
                              gpointer self)
 {
   dt_lib_module_t *dm = (dt_lib_module_t *)self;
-  dt_lib_collect_t *d = (dt_lib_collect_t *)dm->data;
+  dt_lib_collect_t *d = dm->data;
 
   if(type == DT_METADATA_SIGNAL_HIDDEN
      || type == DT_METADATA_SIGNAL_SHOWN)
@@ -3299,10 +3309,9 @@ static gboolean popup_button_callback(GtkWidget *widget,
 }
 
 static void view_set_click(gpointer instance,
-                           gpointer user_data)
+                           dt_lib_module_t *self)
 {
-  dt_lib_module_t *self = (dt_lib_module_t *)user_data;
-  dt_lib_collect_t *d = (dt_lib_collect_t *)self->data;
+  dt_lib_collect_t *d = self->data;
   d->singleclick = dt_conf_get_bool("plugins/lighttable/collect/single-click");
 }
 
@@ -3351,6 +3360,7 @@ static void _populate_collect_combo(GtkWidget *w)
     ADD_COLLECT_ENTRY(DT_COLLECTION_PROP_LENS);
     ADD_COLLECT_ENTRY(DT_COLLECTION_PROP_APERTURE);
     ADD_COLLECT_ENTRY(DT_COLLECTION_PROP_EXPOSURE);
+    ADD_COLLECT_ENTRY(DT_COLLECTION_PROP_EXPOSURE_BIAS);
     ADD_COLLECT_ENTRY(DT_COLLECTION_PROP_FOCAL_LENGTH);
     ADD_COLLECT_ENTRY(DT_COLLECTION_PROP_ISO);
     ADD_COLLECT_ENTRY(DT_COLLECTION_PROP_ASPECT_RATIO);
@@ -3386,12 +3396,7 @@ void _menuitem_preferences(GtkMenuItem *menuitem,
   dt_osx_disallow_fullscreen(dialog);
 #endif
   gtk_widget_show_all(dialog);
-  if(gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
-  {
-    dt_conf_set_bool("plugins/lighttable/recentcollect/hide",
-                     !dt_conf_get_bool("plugins/lighttable/collect/history_hide"));
-    dt_view_collection_update_history_state(darktable.view_manager);
-  }
+  gtk_dialog_run(GTK_DIALOG(dialog));
   gtk_widget_destroy(dialog);
   dt_collection_update_query(darktable.collection,
                              DT_COLLECTION_CHANGE_NEW_QUERY,
@@ -3426,7 +3431,7 @@ void _mount_changed(GUnixMountMonitor *monitor,
                     dt_lib_module_t *self)
 #endif
 {
-  dt_lib_collect_t *d = (dt_lib_collect_t *)self->data;
+  dt_lib_collect_t *d = self->data;
   dt_film_set_folder_status();
   // very rough update (rebuild the view). As these events are not too
   // many that remains acceptable adding film_id to treeview and
@@ -3491,8 +3496,7 @@ static void _history_apply(GtkWidget *widget,
       dt_collection_set_tag_id((dt_collection_t *)darktable.collection, 0);
     }
     if(order)
-      DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals,
-                                    DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
+      DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_IMAGES_ORDER_CHANGE, order);
   }
 }
 
@@ -3570,9 +3574,8 @@ static void _history_pretty_print(const char *buf,
 }
 
 static void _history_show(GtkWidget *widget,
-                          gpointer user_data)
+                          dt_lib_module_t *self)
 {
-  dt_lib_module_t *self = (dt_lib_module_t *)user_data;
   // we show a popup with all the history entries
   GtkMenuShell *pop = GTK_MENU_SHELL(gtk_menu_new());
   gtk_widget_set_size_request(GTK_WIDGET(pop), 200, -1);
@@ -3653,7 +3656,7 @@ GtkWidget *gui_tool_box(dt_lib_module_t *self)
 
 void gui_init(dt_lib_module_t *self)
 {
-  dt_lib_collect_t *d = (dt_lib_collect_t *)calloc(1, sizeof(dt_lib_collect_t));
+  dt_lib_collect_t *d = calloc(1, sizeof(dt_lib_collect_t));
 
   self->data = (void *)d;
   self->widget = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -3690,8 +3693,7 @@ void gui_init(dt_lib_module_t *self)
                      G_CALLBACK(combo_changed), d->rule + i);
     gtk_box_pack_start(box, d->rule[i].combo, FALSE, TRUE, 0);
 
-    w = gtk_entry_new();
-    gtk_entry_set_max_width_chars(GTK_ENTRY(w), 10);
+    w = dt_ui_entry_new(10);
     d->rule[i].text = w;
     gtk_widget_add_events(w, GDK_FOCUS_CHANGE_MASK);
     g_signal_connect(G_OBJECT(w), "focus-in-event",
@@ -3774,11 +3776,8 @@ void gui_init(dt_lib_module_t *self)
   /* setup proxy */
   darktable.view_manager->proxy.module_collect.module = self;
   darktable.view_manager->proxy.module_collect.update = _lib_collect_gui_update;
-  darktable.view_manager->proxy.module_collect.update_history_visibility =
-    _lib_collect_update_history_visibility;
 
   _lib_collect_gui_update(self);
-  _lib_collect_update_history_visibility(self);
 
   if(_combo_get_active_collection(d->rule[0].combo) == DT_COLLECTION_PROP_TAG)
   {
@@ -3806,48 +3805,15 @@ void gui_init(dt_lib_module_t *self)
                                DT_COLLECTION_CHANGE_RELOAD,
                                DT_COLLECTION_PROP_MODULE, NULL);
 
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_COLLECTION_CHANGED,
-                                  G_CALLBACK(collection_updated),
-                                  self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_FILMROLLS_CHANGED,
-                                  G_CALLBACK(filmrolls_updated),
-                                  self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_PREFERENCES_CHANGE,
-                                  G_CALLBACK(preferences_changed),
-                                  self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_FILMROLLS_IMPORTED,
-                                  G_CALLBACK(filmrolls_imported),
-                                  self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_FILMROLLS_REMOVED,
-                                  G_CALLBACK(filmrolls_removed),
-                                  self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_TAG_CHANGED,
-                                  G_CALLBACK(tag_changed),
-                                  self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_GEOTAG_CHANGED,
-                                  G_CALLBACK(_geotag_changed),
-                                  self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_METADATA_CHANGED,
-                                  G_CALLBACK(metadata_changed), self);
-
-  DT_DEBUG_CONTROL_SIGNAL_CONNECT(darktable.signals,
-                                  DT_SIGNAL_PREFERENCES_CHANGE,
-                                  G_CALLBACK(view_set_click), self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_COLLECTION_CHANGED, collection_updated, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_FILMROLLS_CHANGED, filmrolls_updated, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_PREFERENCES_CHANGE, preferences_changed, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_FILMROLLS_IMPORTED, filmrolls_imported, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_FILMROLLS_REMOVED, filmrolls_removed, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_TAG_CHANGED, tag_changed, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_GEOTAG_CHANGED, _geotag_changed, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_METADATA_CHANGED, metadata_changed, self);
+  DT_CONTROL_SIGNAL_CONNECT(DT_SIGNAL_PREFERENCES_CHANGE, view_set_click, self);
 
   dt_action_register(DT_ACTION(self), N_("jump back to previous collection"),
                      _history_previous, GDK_KEY_k,
@@ -3856,24 +3822,16 @@ void gui_init(dt_lib_module_t *self)
 
 void gui_cleanup(dt_lib_module_t *self)
 {
-  dt_lib_collect_t *d = (dt_lib_collect_t *)self->data;
+  dt_lib_collect_t *d = self->data;
 
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(collection_updated), self);
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(filmrolls_updated), self);
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(filmrolls_imported), self);
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(preferences_changed), self);
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(filmrolls_removed), self);
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(tag_changed), self);
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(_geotag_changed), self);
-  DT_DEBUG_CONTROL_SIGNAL_DISCONNECT(darktable.signals,
-                                     G_CALLBACK(view_set_click), self);
+  DT_CONTROL_SIGNAL_DISCONNECT(collection_updated, self);
+  DT_CONTROL_SIGNAL_DISCONNECT(filmrolls_updated, self);
+  DT_CONTROL_SIGNAL_DISCONNECT(filmrolls_imported, self);
+  DT_CONTROL_SIGNAL_DISCONNECT(preferences_changed, self);
+  DT_CONTROL_SIGNAL_DISCONNECT(filmrolls_removed, self);
+  DT_CONTROL_SIGNAL_DISCONNECT(tag_changed, self);
+  DT_CONTROL_SIGNAL_DISCONNECT(_geotag_changed, self);
+  DT_CONTROL_SIGNAL_DISCONNECT(view_set_click, self);
   darktable.view_manager->proxy.module_collect.module = NULL;
   free(d->params);
 
@@ -4083,6 +4041,7 @@ void init(struct dt_lib_module_t *self)
   luaA_enum_value(L, dt_collection_properties_t, DT_COLLECTION_PROP_APERTURE);
   luaA_enum_value(L, dt_collection_properties_t, DT_COLLECTION_PROP_ASPECT_RATIO);
   luaA_enum_value(L, dt_collection_properties_t, DT_COLLECTION_PROP_EXPOSURE);
+  luaA_enum_value(L, dt_collection_properties_t, DT_COLLECTION_PROP_EXPOSURE_BIAS);
   luaA_enum_value(L, dt_collection_properties_t, DT_COLLECTION_PROP_FILENAME);
   luaA_enum_value(L, dt_collection_properties_t, DT_COLLECTION_PROP_GEOTAGGING);
   luaA_enum_value(L, dt_collection_properties_t, DT_COLLECTION_PROP_LOCAL_COPY);

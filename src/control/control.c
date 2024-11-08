@@ -494,7 +494,6 @@ static void _dt_ctl_switch_mode_prepare()
 {
   darktable.control->button_down = 0;
   darktable.control->button_down_which = 0;
-  darktable.gui->center_tooltip = 0;
   GtkWidget *widget = dt_ui_center(darktable.gui->ui);
   gtk_widget_set_tooltip_text(widget, "");
   gtk_widget_grab_focus(widget);
@@ -639,14 +638,22 @@ void dt_control_log(const char *msg, ...)
   va_start(ap, msg);
   char *escaped_msg = g_markup_vprintf_escaped(msg, ap);
   const int msglen = strlen(escaped_msg);
-  g_strlcpy(darktable.control->log_message[darktable.control->log_pos & (DT_CTL_LOG_SIZE-1)],
-            escaped_msg, DT_CTL_LOG_MSG_SIZE);
+
+  const int old_idx = (darktable.control->log_pos - 1) & (DT_CTL_LOG_SIZE-1);
+  const gboolean timeout = darktable.control->log_message_timeout_id;
+  const gboolean new = timeout && (g_strcmp0(escaped_msg, darktable.control->log_message[old_idx]) != 0);
+
+  if(new)
+  {
+    g_strlcpy(darktable.control->log_message[darktable.control->log_pos & (DT_CTL_LOG_SIZE-1)],
+              escaped_msg, DT_CTL_LOG_MSG_SIZE);
+    darktable.control->log_pos++;
+  }
+
   g_free(escaped_msg);
   va_end(ap);
 
-  darktable.control->log_pos++;
-
-  if(darktable.control->log_message_timeout_id)
+  if(timeout)
     g_source_remove(darktable.control->log_message_timeout_id);
 
   darktable.control->log_message_timeout_id
@@ -742,27 +749,27 @@ void dt_control_toast_busy_leave()
 
 void dt_control_queue_redraw()
 {
-  DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_REDRAW_ALL);
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_CONTROL_REDRAW_ALL);
 }
 
 void dt_control_queue_redraw_center()
 {
-  DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_REDRAW_CENTER);
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_CONTROL_REDRAW_CENTER);
 }
 
 void dt_control_navigation_redraw()
 {
-  DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_NAVIGATION_REDRAW);
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_CONTROL_NAVIGATION_REDRAW);
 }
 
 void dt_control_log_redraw()
 {
-  DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_LOG_REDRAW);
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_CONTROL_LOG_REDRAW);
 }
 
 void dt_control_toast_redraw()
 {
-  DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_CONTROL_TOAST_REDRAW);
+  DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_CONTROL_TOAST_REDRAW);
 }
 
 static int _widget_queue_draw(void *widget)
@@ -909,7 +916,7 @@ void dt_control_set_mouse_over_id(const dt_imgid_t imgid)
   {
     darktable.control->mouse_over_id = imgid;
     dt_pthread_mutex_unlock(&(darktable.control->global_mutex));
-    DT_DEBUG_CONTROL_SIGNAL_RAISE(darktable.signals, DT_SIGNAL_MOUSE_OVER_IMAGE_CHANGE);
+    DT_CONTROL_SIGNAL_RAISE(DT_SIGNAL_MOUSE_OVER_IMAGE_CHANGE);
   }
   else
     dt_pthread_mutex_unlock(&(darktable.control->global_mutex));

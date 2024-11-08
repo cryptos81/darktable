@@ -36,11 +36,17 @@ extern "C" {
 /** return value of image io functions. */
 typedef enum dt_imageio_retval_t
 {
-  DT_IMAGEIO_OK = 0,         // all good :)
-  DT_IMAGEIO_FILE_NOT_FOUND, // file has been lost
-  DT_IMAGEIO_LOAD_FAILED,    // file either corrupted or in a format
-                             // not supported by the current loader.
-  DT_IMAGEIO_CACHE_FULL      // buffer allocation for image data failed
+  DT_IMAGEIO_OK = 0,              // all good :)
+  DT_IMAGEIO_FILE_NOT_FOUND,      // file has been lost
+  DT_IMAGEIO_LOAD_FAILED,         // file either corrupted or in a format not supported by the current loader,
+                                  // and a more detailed error from among those below is not available.
+  DT_IMAGEIO_UNSUPPORTED_FORMAT,  // the file type is not supported; may be one which is a build-time option
+  DT_IMAGEIO_UNSUPPORTED_CAMERA,  // the file type is supported, but the camera model is not
+  DT_IMAGEIO_UNSUPPORTED_FEATURE, // the file uses an unsupported feature such as compression type
+  DT_IMAGEIO_FILE_CORRUPTED,      // invalid data was detected while parsing the file
+  DT_IMAGEIO_IOERROR,             // a read error occurred while loading the file
+  DT_IMAGEIO_CACHE_FULL,          // buffer allocation for image data failed
+  DT_IMAGEIO_UNRECOGNIZED         // file format was not recognized by loader(s)
 } dt_imageio_retval_t;
 
 typedef enum dt_imageio_write_xmp_t
@@ -330,6 +336,9 @@ typedef struct dt_image_t
   uint32_t fuji_rotation_pos;
   float pixel_aspect_ratio;
 
+  /* might help to improve highlights reconstruction module */
+  float linear_response_limit;
+
   /* White balance coeffs from the raw */
   dt_aligned_pixel_t wb_coeffs;
 
@@ -347,6 +356,9 @@ typedef struct dt_image_t
   struct dt_cache_entry_t *cache_entry;
 
   dt_image_job_flag_t job_flags;
+
+  /* result of attempting to load the image, needed to be able to report why the image can't be displayed */
+  dt_imageio_retval_t load_status;
 } dt_image_t;
 
 // should be in datetime.h, workaround to solve cross references
